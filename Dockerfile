@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare npm@10.30.0 --activate
 
 WORKDIR /app
 
-COPY package.json npm-lock.json ./
+COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 
 # ------- Dependencies -------
