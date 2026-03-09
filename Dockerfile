@@ -1,7 +1,7 @@
 FROM node:24-slim AS base
 
 ENV NPM_HOME="/npm"
-ENV PATH="$PNPM_HOME:$PATH"
+ENV PATH="$NPM_HOME:$PATH"
 
 RUN corepack enable && corepack prepare npm@10.30.0 --activate
 
