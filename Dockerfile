@@ -1,31 +1,31 @@
 FROM node:24-slim AS base
 
-ENV PNPM_HOME="/pnpm"
+ENV NPM_HOME="/npm"
 ENV PATH="$PNPM_HOME:$PATH"
 
-RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
+RUN corepack enable && corepack prepare npm@10.30.0 --activate
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json npm-lock.json ./
 COPY prisma ./prisma/
 
 # ------- Dependencies -------
 FROM base AS deps
 
-RUN pnpm install --frozen-lockfile
+RUN npm install --frozen-lockfile
 
 # ------- Build -------
 FROM deps AS build
 
 COPY . .
 
-RUN pnpm run build && cp -r src/generated dist/generated
+RUN npm run build && cp -r src/generated dist/generated
 
 # ------- Production -------
 FROM base AS production
 
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+RUN npm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=build /app/dist ./dist
 
