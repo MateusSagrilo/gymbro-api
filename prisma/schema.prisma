@@ -83,13 +83,29 @@ model WorkoutExercise {
 }
 
 model WorkoutSession {
-  id           String     @id @default(uuid())
+  id           String               @id @default(uuid())
   workoutDayId String
-  workoutDay   WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
-  startedAt    DateTime   @db.Timestamptz()
-  completedAt  DateTime?  @db.Timestamptz()
-  createdAt    DateTime   @default(now()) @db.Timestamptz()
-  updatedAt    DateTime   @updatedAt @db.Timestamptz()
+  workoutDay   WorkoutDay           @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  startedAt    DateTime             @db.Timestamptz()
+  completedAt  DateTime?            @db.Timestamptz()
+  createdAt    DateTime             @default(now()) @db.Timestamptz()
+  updatedAt    DateTime             @updatedAt @db.Timestamptz()
+  exerciseLogs WorkoutExerciseLog[]
+}
+
+model WorkoutExerciseLog {
+  id               String         @id @default(uuid())
+  workoutSessionId String
+  workoutSession   WorkoutSession @relation(fields: [workoutSessionId], references: [id], onDelete: Cascade)
+  exerciseId       String
+  exerciseName     String
+  weightKg         Float
+  reps             Int
+  createdAt        DateTime       @default(now()) @db.Timestamptz()
+  updatedAt        DateTime       @updatedAt @db.Timestamptz()
+
+  @@index([workoutSessionId])
+  @@index([exerciseName])
 }
 
 model Session {

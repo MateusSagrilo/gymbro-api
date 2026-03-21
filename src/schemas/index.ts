@@ -11,14 +11,26 @@ export const StartWorkoutSessionSchema = z.object({
   userWorkoutSessionId: z.uuid(),
 });
 
-export const UpdateWorkoutSessionBodySchema = z.object({
-  completedAt: z.iso.datetime(),
+export const WorkoutExerciseLogInputSchema = z.object({
+  exerciseId: z.uuid(),
+  weightKg: z.number().nonnegative(),
+  reps: z.number().int().positive(),
 });
+
+export const UpdateWorkoutSessionBodySchema = z
+  .object({
+    completedAt: z.iso.datetime().optional(),
+    exerciseLogs: z.array(WorkoutExerciseLogInputSchema).optional(),
+  })
+  .refine(
+    (b) => b.completedAt !== undefined || b.exerciseLogs !== undefined,
+    { message: "completedAt and/or exerciseLogs required" },
+  );
 
 export const UpdateWorkoutSessionSchema = z.object({
   id: z.uuid(),
   startedAt: z.iso.datetime(),
-  completedAt: z.iso.datetime(),
+  completedAt: z.iso.datetime().nullable(),
 });
 
 export const StatsQuerySchema = z.object({
@@ -80,6 +92,19 @@ export const GetWorkoutDaySchema = z.object({
       sets: z.number(),
       reps: z.number(),
       restTimeInSeconds: z.number(),
+      previousPerformance: z
+        .object({
+          weightKg: z.number(),
+          reps: z.number(),
+          completedAt: z.iso.date(),
+        })
+        .optional(),
+      sessionLog: z
+        .object({
+          weightKg: z.number(),
+          reps: z.number(),
+        })
+        .optional(),
     }),
   ),
   sessions: z.array(

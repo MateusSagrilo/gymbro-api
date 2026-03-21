@@ -3,7 +3,7 @@ import "dotenv/config";
 import fastifyCors from "@fastify/cors";
 import fastifySwagger from "@fastify/swagger";
 import fastifyApiReference from "@scalar/fastify-api-reference";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import {
   jsonSchemaTransform,
   serializerCompiler,
@@ -19,6 +19,43 @@ import { homeRoutes } from "./routes/home.js";
 import { meRoutes } from "./routes/me.js";
 import { statsRoutes } from "./routes/stats.js";
 import { workoutPlanRoutes } from "./routes/workout-plan.js";
+
+function fastifyHeadersToWeb(request: FastifyRequest): Headers {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(request.headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const part of value) headers.append(key, part);
+    } else {
+      headers.append(key, value);
+    }
+  }
+  return headers;
+}
+
+function serializeRequestBody(request: FastifyRequest): string | undefined {
+  const method = request.method;
+  if (method === "GET" || method === "HEAD") return undefined;
+  const raw = request.body;
+  if (raw === undefined || raw === null) return undefined;
+
+  const contentType = String(
+    request.headers["content-type"] ?? "",
+  ).toLowerCase();
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    if (typeof raw === "string") return raw;
+    if (typeof raw === "object" && !Buffer.isBuffer(raw)) {
+      return new URLSearchParams(
+        raw as Record<string, string>,
+      ).toString();
+    }
+  }
+
+  if (typeof raw === "string") return raw;
+  if (Buffer.isBuffer(raw)) return raw.toString("utf8");
+  return JSON.stringify(raw);
+}
 
 const envToLogger = {
   development: {
@@ -120,36 +157,46 @@ app.withTypeProvider<ZodTypeProvider>().route({
 });
 
 app.route({
-  method: ["GET", "POST"],
+  method: ["GET", "POST", "OPTIONS"],
   url: "/api/auth/*",
   schema: {
     hide: true,
   },
   async handler(request, reply) {
     try {
-      // Construct request URL
-      const url = new URL(request.url, `http://${request.headers.host}`);
+      const host = request.headers.host;
+      if (!host) {
+        return reply.status(400).send({ error: "Missing Host header" });
+      }
 
-      // Convert Fastify headers to standard Headers object
-      const headers = new Headers();
-      Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
-      });
-      // Create Fetch API-compatible request
+      const url = new URL(request.url, `http://${host}`);
+      const body = serializeRequestBody(request);
       const req = new Request(url.toString(), {
         method: request.method,
-        headers,
-        ...(request.body ? { body: JSON.stringify(request.body) } : {}),
+        headers: fastifyHeadersToWeb(request),
+        ...(body !== undefined ? { body } : {}),
       });
-      // Process authentication request
+
       const response = await auth.handler(req);
-      // Forward response to client
+
       reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
-      reply.send(response.body ? await response.text() : null);
+
+      const setCookies = response.headers.getSetCookie?.() ?? [];
+      for (const cookie of setCookies) {
+        reply.header("set-cookie", cookie);
+      }
+
+      response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === "set-cookie") return;
+        reply.header(key, value);
+      });
+
+      const payload =
+        response.body == null ? null : await response.text();
+      return reply.send(payload);
     } catch (error) {
       app.log.error(error);
-      reply.status(500).send({
+      return reply.status(500).send({
         error: "Internal authentication error",
         code: "AUTH_FAILURE",
       });

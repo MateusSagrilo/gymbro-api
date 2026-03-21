@@ -11,7 +11,11 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string(),
   OPENAI_API_KEY: z.string().optional(),
-  WEB_APP_BASE_URL: z.url(),
+  WEB_APP_BASE_URL: z
+    .url()
+    .describe(
+      "URL do app Next (frontend). Usada em Better Auth como trustedOrigins; não é a URL da API.",
+    ),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

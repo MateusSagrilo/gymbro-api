@@ -13,6 +13,12 @@ interface InputDto {
   workoutDayId: string;
 }
 
+interface PreviousPerformance {
+  weightKg: number;
+  reps: number;
+  completedAt: string;
+}
+
 interface OutputDto {
   id: string;
   name: string;
@@ -28,6 +34,8 @@ interface OutputDto {
     sets: number;
     reps: number;
     restTimeInSeconds: number;
+    previousPerformance?: PreviousPerformance;
+    sessionLog?: { weightKg: number; reps: number };
   }>;
   sessions: Array<{
     id: string;
@@ -51,12 +59,55 @@ export class GetWorkoutDay {
       where: { id: dto.workoutDayId, workoutPlanId: dto.workoutPlanId },
       include: {
         exercises: { orderBy: { order: "asc" } },
-        sessions: true,
+        sessions: {
+          include: { exerciseLogs: true },
+        },
       },
     });
 
     if (!workoutDay) {
       throw new NotFoundError("Workout day not found");
+    }
+
+    const inProgressSession = workoutDay.sessions.find(
+      (s) => s.startedAt && !s.completedAt,
+    );
+
+    const recentLogsAcrossPlan = await prisma.workoutSession.findMany({
+      where: {
+        completedAt: { not: null },
+        workoutDay: { workoutPlanId: dto.workoutPlanId },
+      },
+      orderBy: { completedAt: "desc" },
+      take: 100,
+      include: { exerciseLogs: true },
+    });
+
+    const previousByExerciseName = new Map<string, PreviousPerformance>();
+
+    for (const sess of recentLogsAcrossPlan) {
+      for (const log of sess.exerciseLogs) {
+        if (!previousByExerciseName.has(log.exerciseName)) {
+          previousByExerciseName.set(log.exerciseName, {
+            weightKg: log.weightKg,
+            reps: log.reps,
+            completedAt: dayjs.utc(sess.completedAt!).format("YYYY-MM-DD"),
+          });
+        }
+      }
+    }
+
+    const sessionLogByExerciseId = new Map<
+      string,
+      { weightKg: number; reps: number }
+    >();
+    if (inProgressSession) {
+      for (const log of inProgressSession.exerciseLogs) {
+        sessionLogByExerciseId.set(log.exerciseId, {
+          weightKg: log.weightKg,
+          reps: log.reps,
+        });
+      }
     }
 
     return {
@@ -66,15 +117,21 @@ export class GetWorkoutDay {
       coverImageUrl: workoutDay.coverImageUrl ?? undefined,
       estimatedDurationInSeconds: workoutDay.estimatedDurationInSeconds,
       weekDay: workoutDay.weekDay,
-      exercises: workoutDay.exercises.map((exercise) => ({
-        id: exercise.id,
-        name: exercise.name,
-        order: exercise.order,
-        workoutDayId: exercise.workoutDayId,
-        sets: exercise.sets,
-        reps: exercise.reps,
-        restTimeInSeconds: exercise.restTimeInSeconds,
-      })),
+      exercises: workoutDay.exercises.map((exercise) => {
+        const prev = previousByExerciseName.get(exercise.name);
+        const sessionLog = sessionLogByExerciseId.get(exercise.id);
+        return {
+          id: exercise.id,
+          name: exercise.name,
+          order: exercise.order,
+          workoutDayId: exercise.workoutDayId,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          restTimeInSeconds: exercise.restTimeInSeconds,
+          ...(prev ? { previousPerformance: prev } : {}),
+          ...(sessionLog ? { sessionLog } : {}),
+        };
+      }),
       sessions: workoutDay.sessions.map((session) => ({
         id: session.id,
         workoutDayId: session.workoutDayId,

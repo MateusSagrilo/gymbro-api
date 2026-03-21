@@ -1,4 +1,5 @@
-import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import {
   convertToModelMessages,
   stepCountIs,
@@ -13,6 +14,7 @@ import z from "zod";
 
 import { WeekDay } from "../generated/prisma/enums.js";
 import { auth } from "../lib/auth.js";
+import { env } from "../lib/env.js";
 import { CreateWorkoutPlan } from "../usecases/CreateWorkoutPlan.js";
 import { GetUserTrainData } from "../usecases/GetUserTrainData.js";
 import { ListWorkoutPlans } from "../usecases/ListWorkoutPlans.js";
@@ -74,6 +76,13 @@ SEMPRE forneça um \`coverImageUrl\` para cada dia de treino. Escolha com base n
 
 Alterne entre as duas opções de cada categoria para variar. Dias de descanso usam imagem de superior.`;
 
+function getWorkoutCoachModel() {
+  if (env.OPENAI_API_KEY?.trim()) {
+    return createOpenAI({ apiKey: env.OPENAI_API_KEY })("gpt-4o-mini");
+  }
+  return google("gemini-2.5-flash");
+}
+
 export const aiRoutes = async (app: FastifyInstance) => {
   app.withTypeProvider<ZodTypeProvider>().route({
     method: "POST",
@@ -92,12 +101,23 @@ export const aiRoutes = async (app: FastifyInstance) => {
       }
 
       const userId = session.user.id;
-      const { messages } = request.body as { messages: UIMessage[] };
+      const body = request.body as { messages?: UIMessage[] };
+      if (!body?.messages || !Array.isArray(body.messages)) {
+        return reply.status(400).send({ error: "Missing or invalid messages" });
+      }
+
+      let modelMessages;
+      try {
+        modelMessages = await convertToModelMessages(body.messages);
+      } catch (err) {
+        request.log.error(err);
+        return reply.status(400).send({ error: "Invalid message format" });
+      }
 
       const result = streamText({
-        model: openai("gpt-4o-mini"),
+        model: getWorkoutCoachModel(),
         system: SYSTEM_PROMPT,
-        messages: await convertToModelMessages(messages),
+        messages: modelMessages,
         stopWhen: stepCountIs(10),
         tools: {
           getUserTrainData: tool({
@@ -206,10 +226,8 @@ export const aiRoutes = async (app: FastifyInstance) => {
         },
       });
 
-      const response = result.toUIMessageStreamResponse();
-      reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
-      return reply.send(response.body);
+      // Fastify unwraps Web API Response (status, headers, ReadableStream body).
+      return reply.send(result.toUIMessageStreamResponse());
     },
   });
 };
