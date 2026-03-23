@@ -21,9 +21,7 @@ export const auth = betterAuth({
   plugins: [openAPI()],
   advanced: {
     crossSubDomainCookies: {
-      enabled: true,
-      domain:
-        env.NODE_ENV === "production" ? ".fullstackclub.com.br" : undefined,
+      enabled: false,
     },
   },
 });
