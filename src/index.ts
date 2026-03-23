@@ -46,9 +46,7 @@ function serializeRequestBody(request: FastifyRequest): string | undefined {
   if (contentType.includes("application/x-www-form-urlencoded")) {
     if (typeof raw === "string") return raw;
     if (typeof raw === "object" && !Buffer.isBuffer(raw)) {
-      return new URLSearchParams(
-        raw as Record<string, string>,
-      ).toString();
+      return new URLSearchParams(raw as Record<string, string>).toString();
     }
   }
 
@@ -96,7 +94,7 @@ await app.register(fastifySwagger, {
 });
 
 await app.register(fastifyCors, {
-  origin: [env.WEB_APP_BASE_URL],
+  origin: [env.WEB_APP_BASE_URL, "http://localhost:3000"],
   credentials: true,
 });
 
@@ -191,8 +189,7 @@ app.route({
         reply.header(key, value);
       });
 
-      const payload =
-        response.body == null ? null : await response.text();
+      const payload = response.body == null ? null : await response.text();
       return reply.send(payload);
     } catch (error) {
       app.log.error(error);
