@@ -13,6 +13,7 @@ export const auth = betterAuth({
       prompt: "select_account",
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
+      redirectURI: `${env.API_BASE_URL}/api/auth/callback/google`,
     },
   },
   account: {
@@ -27,6 +28,10 @@ export const auth = betterAuth({
       enabled: false,
     },
     cookieOptions: {
+      sameSite: "none",
+      secure: true,
+    },
+    defaultCookieAttributes: {
       sameSite: "none",
       secure: true,
     },
