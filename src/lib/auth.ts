@@ -24,16 +24,19 @@ export const auth = betterAuth({
   }),
   plugins: [openAPI()],
   advanced: {
+    cookiePrefix: "gymbro",
     crossSubDomainCookies: {
       enabled: false,
     },
     cookieOptions: {
-      sameSite: "none",
-      secure: true,
+      sameSite: "lax",
+      secure: false,
+      httpOnly: true,
     },
     defaultCookieAttributes: {
-      sameSite: "none",
-      secure: true,
+      sameSite: "lax",
+      secure: false,
+      httpOnly: true,
     },
   },
 });
